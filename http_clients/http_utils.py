@@ -3,6 +3,7 @@ import functools
 from requests.exceptions import RequestException
 import logging
 
+bounds = [1, 2, 3, 4, 5]
 
 def retry_on_exception(
     exceptions=(RequestException,),
@@ -31,14 +32,16 @@ def retry_on_exception(
                 except exceptions as e:
                     retries += 1
                     if retries > max_retries:
-                        logging.error(f"Max retries exceeded: {e}")
                         if on_failure:
                             on_failure(e)
+                        else:
+                            logging.error(f"Max retries exceeded: {e}")
                         return
                     
-                    logging.warning(f"Retrying ({retries}/{max_retries}) in {delay}s due to: {e}")
                     if on_retry:
-                        on_retry(e)
+                        on_retry(e, bounds=bounds)
+                    else:
+                        logging.warning(f"Retrying ({retries}/{max_retries}) in {delay}s due to: {e}")
                     time.sleep(min(delay, max_delay))
                     delay *= backoff_factor
         return wrapper
@@ -46,17 +49,24 @@ def retry_on_exception(
 
 if __name__=="__main__":
     import requests
-    from requests import Response
-    
+        
     logging.basicConfig(level=logging.INFO)
     
-    def on_retry(e):
-        logging.info(f"Retrying due to: {e}")
-    def on_success(r: Response):
+    def on_retry(*args, **kwargs):
+        logging.info(f"""
+        error: {args[0]}
+        bounds: {kwargs.get('bounds')}
+        """
+        )
+    
+    def on_success(*args, **kwargs):
         logging.info("Request succeeded")
+        r = args[0]
         if r.ok:
             logging.info(r.json())
-    def on_failure(e):
+    
+    def on_failure(*args, **kwargs):
+        e = args[0]
         logging.info(f"Request failed: {e}")
     
     @retry_on_exception(on_retry=on_retry, on_success=on_success, on_failure=on_failure)
