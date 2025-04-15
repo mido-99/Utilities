@@ -1,11 +1,12 @@
 import functools
-from httpx._exceptions import RequestError
+import curl_cffi.requests
+from curl_cffi.requests.exceptions import CurlError, RequestException
 import logging
 import asyncio
 
 
 def retry_on_exception(
-    exceptions=(RequestError,),
+    exceptions=(Exception,),
     max_retries=3,
     initial_delay=1,
     backoff_factor=2,
@@ -14,7 +15,7 @@ def retry_on_exception(
     on_success=None,
     on_failure=None,
     logger=logging,
-):
+    ):
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -38,7 +39,8 @@ def retry_on_exception(
                         return
                     
                     if on_retry:
-                        await on_retry(e) if asyncio.iscoroutinefunction(on_retry) else on_retry(e)
+                        await on_retry(e, retries=retries, max_retries=max_retries) if asyncio.iscoroutinefunction(on_retry) \
+                        else on_retry(e, retries=retries, max_retries=max_retries)
                     else:
                         logging.warning(f"Retrying ({retries}/{max_retries}) in {delay}s due to: {e}")
                     await asyncio.sleep(min(delay, max_delay))
@@ -47,15 +49,19 @@ def retry_on_exception(
     return decorator
 
 if __name__=="__main__":
-    import httpx
+    import curl_cffi
         
     logging.basicConfig(level=logging.INFO)
         
     async def on_retry(*args, **kwargs):
-        logging.warning(f"""
-        error: {args[0]}
-        """.strip()
-        )
+        e = args[0]
+        if isinstance(e, (CurlError, RequestException)):
+            logging.warning(f"Connection Error. Retrying {kwargs.get('retries')}/{kwargs.get('max_retries')}...")
+        elif isinstance(e, (TimeoutError )):
+            logging.warning(f"Timed out: {e}")
+        else:
+            logging.warning(f"Error: {e}")
+            logging.warning(f"{type(e)}")
     
     async def on_success(*args, **kwargs):
         logging.info("Request succeeded")
@@ -69,7 +75,7 @@ if __name__=="__main__":
     
     @retry_on_exception(on_retry=on_retry, on_success=on_success, on_failure=on_failure)
     async def send_request(*args, **kwargs):
-        return await httpx.AsyncClient().request(*args, **kwargs)
+        return await curl_cffi.requests.AsyncSession().request(*args, **kwargs)
     
     async def main():
         r = await send_request('GET', 'https://httpbin.org/ip', timeout=5)
