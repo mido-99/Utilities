@@ -1,21 +1,26 @@
 import functools
-import curl_cffi.requests
-from curl_cffi.requests.exceptions import CurlError, RequestException
 import logging
 import asyncio
+import random
+from typing import Optional, Callable
+
+import curl_cffi.requests
+from curl_cffi.requests.exceptions import CurlError, RequestException, ProxyError
 
 
 def retry_on_exception(
     exceptions=(Exception,),
-    max_retries=3,
-    initial_delay=1,
-    backoff_factor=2,
+    max_retries = 3,
+    initial_delay = 1,
+    backoff_factor = 2,
     max_delay=30,
-    on_retry=None,
-    on_success=None,
-    on_failure=None,
+    jitter = 0.1,
+    on_retry : Optional[Callable] = None,
+    on_success : Optional[Callable] = None,
+    on_failure : Optional[Callable] = None,
     logger=logging,
     ):
+    
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -35,18 +40,24 @@ def retry_on_exception(
                         if on_failure:
                             await on_failure(e) if asyncio.iscoroutinefunction(on_failure) else on_failure(e)
                         else:
-                            logging.error(f"Max retries exceeded: {e}")
+                            logging.error(f"Max retries reached: {e}")
                         return
+                    
+                    # Calculate delay with jitter
+                    current_delay = delay * (1 + random.uniform(-jitter, jitter))
                     
                     if on_retry:
                         await on_retry(e, retries=retries, max_retries=max_retries) if asyncio.iscoroutinefunction(on_retry) \
                         else on_retry(e, retries=retries, max_retries=max_retries)
                     else:
                         logging.warning(f"Retrying ({retries}/{max_retries}) in {delay}s due to: {e}")
-                    await asyncio.sleep(min(delay, max_delay))
+                        
+                    await asyncio.sleep(min(current_delay, max_delay))
                     delay *= backoff_factor
+                    
         return wrapper
     return decorator
+
 
 if __name__=="__main__":
     import curl_cffi
@@ -59,6 +70,8 @@ if __name__=="__main__":
             logging.warning(f"Connection Error. Retrying {kwargs.get('retries')}/{kwargs.get('max_retries')}...")
         elif isinstance(e, (TimeoutError )):
             logging.warning(f"Timed out: {e}")
+        elif isinstance(e, (ProxyError )):
+            logging.warning(f"Proxy Error: {e}")
         else:
             logging.warning(f"Error: {e}")
             logging.warning(f"{type(e)}")
