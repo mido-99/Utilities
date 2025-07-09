@@ -37,12 +37,16 @@ def get_windows_scaling():
 
 if __name__ == "__main__":
     
-    print('3 Seconds to start')
+    print('2 Seconds to start')
     time.sleep(3)
-    while True:
-        pyautogui.moveTo(350, 340)
+    # while True:
+    for _ in range(7):
+        pyautogui.moveTo(1540, 643)
         pyautogui.click()
-        time.sleep(0.5)
-        pyautogui.moveTo(533, 345)
+        time.sleep(0.1)
+        pyautogui.moveTo(1498, 728)
         pyautogui.click()
-        time.sleep(2.5)
+        pyautogui.moveTo(1195, 680)
+        pyautogui.click()
+        time.sleep(0.2)
+        # break
