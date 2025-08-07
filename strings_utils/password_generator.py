@@ -15,6 +15,7 @@ def generate_secure_password(length=12):
     password = ''.join(secrets.choice(alphabet) for _ in range(length))
     return password
 
-# Example usage:
-password = generate_secure_password(16)
-print(f"Generated password: {password}")
+if __name__=="__main__":
+    # Example usage:
+    password = generate_secure_password(16)
+    print(f"Generated password: {password}")
